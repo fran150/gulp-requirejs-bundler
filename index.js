@@ -15,13 +15,16 @@ module.exports = function(options) {
     // the process, capture the list of modules included in each bundle file.
     var bundlePromises = _.map(options.bundles || {}, function(bundleModules, bundleName) {
             return primaryPromise.then(function(primaryOutput) {
-                return getRjsOutput({
-                    out: bundleName + ".js",
-                    baseUrl: options.baseUrl,
-                    paths: options.paths,
-                    include: bundleModules,
-                    exclude: primaryOutput.modules
-                }, bundleName);
+                var config = options;
+
+                config.out = bundleName + ".js";
+                config.include = bundleModules;
+                config.exclude = primaryOutput.modules;
+                config.name = undefined;
+                config.insertRequire = undefined;
+
+
+                return getRjsOutput(config, bundleName);
             });
         });
 
