@@ -1,16 +1,17 @@
 {
-  "name": "gulp-requirejs-bundler",
-  "version": "0.1.1",
-  "description": "Gulp plugin: wraps gulp-requirejs, adds ability to emit bundle files and bundle config",
+  "name": "gulp-requirejs-bundler-quark",
+  "version": "0.1.2",
+  "description": "Modified gulp-requirejs-bundler for quark",
   "keywords": [
-    "gulpplugin"
+      "gulpplugin",
+      "bundler",
+      "quark"
   ],
   "author": {
-    "name": "Steven Sanderson",
-    "email": "",
-    "url": "https://github.com/SteveSanderson"
+    "name": "Francisco López",
+    "email": "panchi150@gmail.com",
+    "url": "https://github.com/fran150"
   },
-  "repository": "SteveSanderson/gulp-requirejs-bundler",
   "engines": {
     "node": ">=0.8.0",
     "npm": ">=1.2.10"
