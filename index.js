@@ -9,24 +9,55 @@ module.exports = function(options) {
     // First run r.js to produce its default (non-bundle-aware) output. In the process,
     // we capture the list of modules it wrote.
     var primaryPromise = getRjsOutput(options);
+    
+    // Do the same for each of the configured bundles
+    var firstBundlePromises = _.map(options.bundles || {}, function(bundleModules, bundleName) {
+        var config = merge({}, options);
+
+        config.out = bundleName + ".js";
+        config.include = bundleModules;
+        config.name = undefined;
+        config.insertRequire = undefined;
+
+        return getRjsOutput(config, bundleName);
+    });
 
     // Next, take the above list of modules, and for each configured bundle, write out
-    // the bundle's .js file, excluding any modules included in the primary output. In
+    // the bundle's .js file, excluding (shallow) any modules included in the primary and other modules. In
     // the process, capture the list of modules included in each bundle file.
     var bundlePromises = _.map(options.bundles || {}, function(bundleModules, bundleName) {
-            return primaryPromise.then(function(primaryOutput) {
-                var config = options;
+        return Q.all([primaryPromise].concat(firstBundlePromises)).then(function(allOutputs) {
+            var primaryOutput = allOutputs[0];
+            var bundleOutputs = allOutputs.slice(1);
 
-                config.out = bundleName + ".js";
-                config.include = bundleModules;
-                config.exclude = primaryOutput.modules;
-                config.name = undefined;
-                config.insertRequire = undefined;
+            var inBundle = new Array();
+            var excludedModules = new Array();
 
+            for (var i = 0; i < bundleOutputs.length; i++) {
+                var bundleOutput = bundleOutputs[i];
+                
+                if (bundleOutput.itemName != bundleName) {
+                    excludedModules = excludedModules.concat(bundleOutput.modules);
+                } else {
+                    inBundle = bundleOutput.modules;
+                }
+            }
+        
+            var config = merge({}, options);
 
-                return getRjsOutput(config, bundleName);
-            });
+            console.log(inBundle);
+
+            config.out = bundleName + ".js";
+            config.include = bundleModules;
+            config.excludeShallow = primaryOutput.modules.concat(_.difference(excludedModules, inBundle));
+            config.name = undefined;
+            config.insertRequire = undefined;
+
+            //console.log(config);
+
+            return getRjsOutput(config, bundleName);
         });
+    });
 
     // Next, produce the "final" primary output by waiting for all the above to complete, then
     // concatenating the bundle config (list of modules in each bundle) to the end of the
@@ -82,13 +113,14 @@ function pluckPromiseArray(promiseArray, propertyName) {
 
 function getRjsOutput(options, itemName) {
     // Capture the list of written modules by adding to an array on each onBuildWrite callback
-    var modulesList = [],
+    let modulesList = [],
         patchedOptions = merge({}, options, {
             onBuildWrite: function(moduleName, path, contents) {
                 modulesList.push(moduleName);
                 return contents;
             }
         }),
+
         rjsOutputPromise = streamToPromise(rjs(patchedOptions));
 
     return rjsOutputPromise.then(function(file) {
