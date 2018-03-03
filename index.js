@@ -15,14 +15,26 @@ module.exports = function(options) {
     // the process, capture the list of modules included in each bundle file.
     var bundlePromises = _.map(options.bundles || {}, function(bundleModules, bundleName) {
             return primaryPromise.then(function(primaryOutput) {
-                var config = options;
+                var config = merge({}, options);
 
                 config.out = bundleName + ".js";
-                config.include = bundleModules;
-                config.exclude = primaryOutput.modules;
                 config.name = undefined;
                 config.insertRequire = undefined;
 
+                if (_.isArray(bundleModules)) {
+                    config.include = bundleModules;
+                    config.exclude = primaryOutput.modules;    
+                } else {
+                    if (bundleModules.include) {
+                        config.include = bundleModules.include;
+                    } 
+                    
+                    if (bundleModules.exclude) {
+                        config.exclude = primaryOutput.modules.concat(bundleModules.exclude);
+                    } else {
+                        config.exclude = primaryOutput.modules;
+                    }
+                }
 
                 return getRjsOutput(config, bundleName);
             });
@@ -40,14 +52,38 @@ module.exports = function(options) {
                 bundleConfigCode = '\nrequire.config('
                     + JSON.stringify({ bundles: bundleConfig }, true, 2)
                     + ');\n';
+            
             return new File({
                 path: primaryOutput.file.path,
                 contents: new Buffer(primaryOutput.file.contents.toString() + bundleConfigCode)
             });
         });
 
+    var manifestJsonPromise = Q.all([primaryPromise].concat(bundlePromises)).then(function(allOutputs) {
+        var primaryOutput = allOutputs[0];
+        var result = {};
+        
+        for (var i = 0; i < allOutputs.length; i++) {
+            result[allOutputs[i].itemName || 'main'] = allOutputs[i].modules;
+        }
+
+        return new File({
+            path: "./manifest.json",
+            contents: new Buffer(JSON.stringify(result, true, 2))
+        });    
+    });
+
+
     // Convert the N+1 promises (N bundle files, 1 final primary file) into a single stream for gulp to await
-    var allFilePromises = pluckPromiseArray(bundlePromises, 'file').concat(finalPrimaryPromise);
+    var allFilePromises;
+    
+    if (options.manifest) {
+        allFilePromises = pluckPromiseArray(bundlePromises, 'file').concat(finalPrimaryPromise, manifestJsonPromise);
+    } else {
+        allFilePromises = pluckPromiseArray(bundlePromises, 'file').concat(finalPrimaryPromise);
+    }
+    
+
     return es.merge.apply(es, allFilePromises.map(promiseToStream));
 }
 
